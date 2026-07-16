@@ -45,12 +45,13 @@
         <div id="add-meal-content" class="add-meal-content collapsed">
           <form id="meal-form" class="stack">
             <input id="meal-name" type="text" maxlength="40" placeholder="Ex. iogurt amb fruita" autocomplete="off" />
-            <select id="meal-category">
-              <option value="desayunar">Esmorzar</option>
-              <option value="comer">Dinar</option>
-              <option value="merendar">Berenar</option>
-              <option value="cenar">Sopar</option>
-            </select>
+            <fieldset class="checkbox-group">
+              <legend class="checkbox-group-label">Categories</legend>
+              <label class="checkbox-option"><input type="checkbox" name="meal-category" value="desayunar" checked /> Esmorzar</label>
+              <label class="checkbox-option"><input type="checkbox" name="meal-category" value="comer" /> Dinar</label>
+              <label class="checkbox-option"><input type="checkbox" name="meal-category" value="merendar" /> Berenar</label>
+              <label class="checkbox-option"><input type="checkbox" name="meal-category" value="cenar" /> Sopar</label>
+            </fieldset>
             <button class="primary-btn" type="submit">Guardar plat</button>
           </form>
         </div>
@@ -84,3 +85,10 @@
     <script src="app.js"></script>
   </body>
 </html>
+
+<input
+  type="file"
+  id="backup-input"
+  accept=".json"
+  hidden
+>

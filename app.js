@@ -6,6 +6,7 @@ const MEAL_SLOTS = [
   { value: "cenar", label: "Sopar", icon: "🌙" },
 ];
 const storageKey = "menu-setmanal-state-v3";
+const prefersDarkMedia = window.matchMedia("(prefers-color-scheme: dark)");
 
 const state = loadState();
 
@@ -16,7 +17,7 @@ const todayWeekWrapper = document.getElementById("today-week-wrapper");
 const weekRange = document.getElementById("week-range");
 const weekSectionRange = document.getElementById("week-section-range");
 const mealNameInput = document.getElementById("meal-name");
-const mealCategorySelect = document.getElementById("meal-category");
+const mealCategoryInputs = Array.from(document.querySelectorAll("input[name='meal-category']"));
 const mealList = document.getElementById("meal-list");
 const addMealToggle = document.getElementById("add-meal-toggle");
 const addMealContent = document.getElementById("add-meal-content");
@@ -56,25 +57,35 @@ nextWeekButton.addEventListener("click", () => {
 mealForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const value = mealNameInput.value.trim();
-  const category = mealCategorySelect.value;
+  const categories = mealCategoryInputs.filter((input) => input.checked).map((input) => input.value);
 
   if (!value) {
     mealNameInput.focus();
     return;
   }
 
-  const exists = state.meals.some((meal) => meal.name.toLowerCase() === value.toLowerCase() && meal.category === category);
-  if (!exists) {
+  if (!categories.length) {
+    mealCategoryInputs[0]?.focus();
+    return;
+  }
+
+  const existingMeal = state.meals.find((meal) => meal.name.toLowerCase() === value.toLowerCase());
+
+  if (existingMeal) {
+    existingMeal.categories = Array.from(new Set([...existingMeal.categories, ...categories]));
+  } else {
     state.meals.push({
       id: createId(),
       name: value,
-      category,
+      categories,
     });
-    saveState();
   }
 
+  saveState();
   mealNameInput.value = "";
-  mealCategorySelect.value = "comer";
+  mealCategoryInputs.forEach((input, index) => {
+    input.checked = index === 0;
+  });
   render();
 });
 
@@ -97,9 +108,9 @@ mealList.addEventListener("click", (event) => {
   const weekPlan = getActiveWeekPlan();
   DAYS.forEach((day) => {
     MEAL_SLOTS.forEach((slot) => {
-      if (weekPlan[day]?.[slot.value] === mealId) {
-        weekPlan[day][slot.value] = "";
-      }
+      const slotValue = weekPlan[day]?.[slot.value];
+      if (!Array.isArray(slotValue)) return;
+      weekPlan[day][slot.value] = slotValue.filter((id) => id !== mealId);
     });
   });
 
@@ -118,12 +129,13 @@ weekList.addEventListener("change", (event) => {
     weekPlan[day] = createDayPlan();
   }
 
-  weekPlan[day][slot] = select.value;
+  weekPlan[day][slot] = Array.from(select.selectedOptions).map((option) => option.value);
   saveState();
   render();
 });
 
 themeToggle.addEventListener("click", () => {
+  state.followSystemTheme = false;
   state.darkMode = !state.darkMode;
   saveState();
   applyTheme();
@@ -161,15 +173,11 @@ function loadState() {
   }
 
   return {
-    meals: [
-      { id: createId(), name: "Porridge amb fruita", category: "desayunar" },
-      { id: createId(), name: "Amanida de quinoa", category: "comer" },
-      { id: createId(), name: "Iogurt amb fruits secs", category: "merendar" },
-      { id: createId(), name: "Arròs amb pollastre", category: "cenar" },
-    ],
+    meals: [],
     weekPlans: {},
     currentWeekKey: getCurrentWeekKey(),
     darkMode: false,
+    followSystemTheme: true,
     expandedMealCategories: {},
   };
 }
@@ -178,18 +186,22 @@ function normalizeState(saved) {
   const meals = Array.isArray(saved.meals)
     ? saved.meals.map((meal, index) => {
         if (typeof meal === "string") {
-          return { id: createId(), name: meal, category: "comer" };
+          return { id: createId(), name: meal, categories: ["comer"] };
         }
 
         if (meal && typeof meal === "object") {
           return {
             id: meal.id || createId(),
             name: meal.name || "Plat",
-            category: meal.category || "comer",
+            categories: Array.isArray(meal.categories)
+              ? meal.categories.filter((category) => typeof category === "string" && category)
+              : meal.category
+              ? [meal.category]
+              : ["comer"],
           };
         }
 
-        return { id: createId(), name: `Plat ${index + 1}`, category: "comer" };
+        return { id: createId(), name: `Plat ${index + 1}`, categories: ["comer"] };
       })
     : [];
 
@@ -209,7 +221,8 @@ function normalizeState(saved) {
     meals,
     weekPlans,
     currentWeekKey,
-    darkMode: Boolean(saved.darkMode),
+    darkMode: saved.followSystemTheme ? prefersDarkMedia.matches : Boolean(saved.darkMode),
+    followSystemTheme: saved.followSystemTheme !== false,
     expandedMealCategories: saved.expandedMealCategories && typeof saved.expandedMealCategories === "object" ? saved.expandedMealCategories : {},
   };
 }
@@ -217,6 +230,12 @@ function normalizeState(saved) {
 function saveState() {
   localStorage.setItem(storageKey, JSON.stringify(state));
 }
+
+prefersDarkMedia.addEventListener("change", () => {
+  if (state.followSystemTheme) {
+    applyTheme();
+  }
+});
 
 function render() {
   applyTheme();
@@ -230,7 +249,7 @@ function render() {
 function renderMeals() {
   const counts = MEAL_SLOTS.map((slot) => ({
     ...slot,
-    total: state.meals.filter((meal) => meal.category === slot.value).length,
+    total: state.meals.filter((meal) => meal.categories.includes(slot.value)).length,
   }));
   const totalText = `${state.meals.length} plats · ${counts.map((item) => `${item.total} ${item.label.toLowerCase()}`).join(" · ")}`;
   mealCount.textContent = totalText;
@@ -241,8 +260,7 @@ function renderMeals() {
   }
 
   const groups = MEAL_SLOTS.map((slot) => {
-    const items = state.meals.filter((meal) => meal.category === slot.value);
-    if (!items.length) return "";
+      const items = state.meals.filter((meal) => meal.categories.includes(slot.value));
 
     const isExpanded = Boolean(state.expandedMealCategories?.[slot.value]);
 
@@ -257,17 +275,22 @@ function renderMeals() {
         </button>
         <div class="category-content ${isExpanded ? "expanded" : "collapsed"}">
           ${items
-            .map(
-              (meal) => `
+            .map((meal) => {
+              const labels = meal.categories
+                .map((value) => MEAL_SLOTS.find((slot) => slot.value === value)?.label || value)
+                .filter(Boolean)
+                .join(" · ");
+
+              return `
                 <div class="meal-item">
                   <div>
                     <strong>${escapeHtml(meal.name)}</strong>
-                    <div class="meal-meta">${slot.label}</div>
+                    <div class="meal-meta">${escapeHtml(labels)}</div>
                   </div>
                   <button class="secondary-btn" data-action="delete" data-meal-id="${escapeHtml(meal.id)}">Eliminar</button>
                 </div>
-              `
-            )
+              `;
+            })
             .join("")}
         </div>
       </div>
@@ -288,16 +311,12 @@ function renderWeek() {
 
   weekList.innerHTML = DAYS.map((day) => {
     const dayPlan = weekPlan[day] || createDayPlan();
-    const filledSlots = MEAL_SLOTS.filter((slot) => dayPlan[slot.value]).length;
-    const options = state.meals
-      .map((meal) => `<option value="${escapeHtml(meal.id)}">${escapeHtml(meal.name)}</option>`)
-      .join("");
+    const filledSlots = MEAL_SLOTS.filter((slot) => dayPlan[slot.value]?.length).length;
 
     const slotsMarkup = MEAL_SLOTS.map((slot) => {
-      const currentMealId = dayPlan[slot.value] || "";
-      const currentMeal = state.meals.find((meal) => meal.id === currentMealId);
+      const currentMealIds = dayPlan[slot.value] || [];
       const selects = state.meals
-        .map((meal) => `<option value="${escapeHtml(meal.id)}" ${currentMealId === meal.id ? "selected" : ""}>${escapeHtml(meal.name)}</option>`)
+        .map((meal) => `<option value="${escapeHtml(meal.id)}" ${currentMealIds.includes(meal.id) ? "selected" : ""}>${escapeHtml(meal.name)}</option>`)
         .join("");
 
       return `
@@ -307,8 +326,7 @@ function renderWeek() {
             <span>${slot.label}</span>
           </label>
           <div class="slot-actions">
-            <select data-day="${day}" data-slot="${slot.value}">
-              <option value="">Sense plat</option>
+            <select multiple data-day="${day}" data-slot="${slot.value}">
               ${selects}
             </select>
           </div>
@@ -367,8 +385,9 @@ function resetAddMealAccordion() {
 }
 
 function applyTheme() {
-  document.body.classList.toggle("dark", state.darkMode);
-  themeToggle.textContent = state.darkMode ? "☀️" : "🌙";
+  const isDark = state.followSystemTheme ? prefersDarkMedia.matches : state.darkMode;
+  document.body.classList.toggle("dark", isDark);
+  themeToggle.textContent = isDark ? "☀️" : "🌙";
 }
 
 function buildShareText() {
@@ -379,9 +398,12 @@ function buildShareText() {
       const dayPlan = getActiveWeekPlan()[day] || createDayPlan();
       const lines = [`${day}:`];
       MEAL_SLOTS.forEach((slot) => {
-        const mealId = dayPlan[slot.value];
-        const meal = state.meals.find((item) => item.id === mealId);
-        lines.push(`- ${slot.label}: ${meal ? meal.name : "Sense plat"}`);
+        const mealIds = dayPlan[slot.value] || [];
+        const mealNames = mealIds
+          .map((id) => state.meals.find((item) => item.id === id))
+          .filter(Boolean)
+          .map((meal) => meal.name);
+        lines.push(`- ${slot.label}: ${mealNames.length ? mealNames.join(" + ") : "Sense plat"}`);
       });
       return lines;
     }),
@@ -398,7 +420,7 @@ function showToast(message) {
 }
 
 function createDayPlan() {
-  return Object.fromEntries(MEAL_SLOTS.map((slot) => [slot.value, ""]));
+  return Object.fromEntries(MEAL_SLOTS.map((slot) => [slot.value, []]));
 }
 
 function normalizeWeekPlan(weekPlanValue, meals) {
@@ -411,12 +433,22 @@ function normalizeWeekPlan(weekPlanValue, meals) {
       MEAL_SLOTS.forEach((slot) => {
         const value = current[slot.value];
         if (!value) return;
-        const matchingMeal = meals.find((meal) => meal.id === value || meal.name === value);
-        normalizedDayPlan[slot.value] = matchingMeal ? matchingMeal.id : "";
+
+        if (Array.isArray(value)) {
+          normalizedDayPlan[slot.value] = value
+            .map((item) => {
+              const matchingMeal = meals.find((meal) => meal.id === item || meal.name === item);
+              return matchingMeal ? matchingMeal.id : null;
+            })
+            .filter(Boolean);
+        } else {
+          const matchingMeal = meals.find((meal) => meal.id === value || meal.name === value);
+          normalizedDayPlan[slot.value] = matchingMeal ? [matchingMeal.id] : [];
+        }
       });
     } else if (current && (typeof current === "string" || typeof current === "number")) {
       const matchingMeal = meals.find((meal) => meal.id === current || meal.name === current);
-      normalizedDayPlan.desayunar = matchingMeal ? matchingMeal.id : "";
+      normalizedDayPlan.desayunar = matchingMeal ? [matchingMeal.id] : [];
     }
 
     normalizedWeekPlan[day] = normalizedDayPlan;
@@ -499,3 +531,73 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js");
   });
 }
+
+function exportBackup() {
+  const data = localStorage.getItem(storageKey);
+
+  if (!data) {
+    showToast("No hi ha dades per exportar.");
+    return;
+  }
+
+  const blob = new Blob([data], {
+    type: "application/json"
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  a.href = url;
+  a.download = `menu-setmanal-${today}.json`;
+
+  a.click();
+
+  URL.revokeObjectURL(url);
+
+  showToast("Còpia de seguretat exportada.");
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try {
+      JSON.parse(reader.result);
+
+      localStorage.setItem(storageKey, reader.result);
+
+      showToast("Còpia restaurada.");
+
+      location.reload();
+
+    } catch {
+
+      showToast("Aquest fitxer no és vàlid.");
+    }
+  };
+
+  reader.readAsText(file);
+}
+
+const backupInput = document.getElementById("backup-input");
+
+backupInput.addEventListener("change", e => {
+
+  if (!e.target.files.length) return;
+
+  importBackup(e.target.files[0]);
+
+});
+
+document
+  .getElementById("export-backup")
+  .addEventListener("click", exportBackup);
+
+  document
+  .getElementById("import-backup")
+  .addEventListener("click", () => {
+    backupInput.click();
+  });
