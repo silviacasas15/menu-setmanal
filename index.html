@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ca">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f2e4ff" />
+    <title>Menú Setmanal</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.json">
+  </head>
+  <body>
+    <main class="phone-shell">
+      <header class="hero-card hero-top">
+        <div>
+          <h1>Menú Setmanal</h1>
+        </div>
+        <div class="hero-actions">
+          <button id="theme-toggle" class="icon-btn" type="button" aria-label="Canviar tema">🌙</button>
+          <button id="share-menu" class="icon-btn" type="button" aria-label="Compartir menú">↗</button>
+        </div>
+      </header>
+
+      <section class="card calendar-card">
+        <div class="calendar-nav">
+          <button id="prev-week" class="icon-btn" type="button" aria-label="Setmana anterior">←</button>
+          <div class="week-picker">
+            <p class="eyebrow">Calendari</p>
+            <h2 id="week-range">Setmana</h2>
+          </div>
+          <button id="next-week" class="icon-btn" type="button" aria-label="Setmana següent">→</button>
+        </div>
+        <div id="today-week-wrapper" class="calendar-actions"></div>
+      </section>
+
+      <section class="card">
+        <button id="add-meal-toggle" class="section-toggle" type="button" aria-expanded="false">
+          <div class="section-head">
+            <div>
+              <h2>Afegir plat</h2>
+              <p class="subtext">Tria el moment del dia i guarda-ho amb un sol toc.</p>
+            </div>
+            <span class="toggle-icon">▸</span>
+          </div>
+        </button>
+        <div id="add-meal-content" class="add-meal-content collapsed">
+          <form id="meal-form" class="stack">
+            <input id="meal-name" type="text" maxlength="40" placeholder="Ex. iogurt amb fruita" autocomplete="off" />
+            <select id="meal-category">
+              <option value="desayunar">Esmorzar</option>
+              <option value="comer">Dinar</option>
+              <option value="merendar">Berenar</option>
+              <option value="cenar">Sopar</option>
+            </select>
+            <button class="primary-btn" type="submit">Guardar plat</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card">
+        <button id="meals-toggle" class="section-toggle" type="button" aria-expanded="false">
+          <div class="section-head">
+            <div>
+              <h2>Els meus plats</h2>
+              <p id="meal-count" class="subtext"></p>
+            </div>
+            <span class="toggle-icon">▸</span>
+          </div>
+        </button>
+        <div id="meal-list" class="meal-list collapsed"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <h2>Setmana <span id="week-section-range" class="week-section-range"></span></h2>
+            <p class="subtext">Assigna un plat a cada dia i deixa la setmana preparada.</p>
+          </div>
+        </div>
+        <div id="week-list" class="week-list"></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
